@@ -227,11 +227,40 @@ class PoseAssociation:
             return np.zeros((128, 128, 3), dtype=np.uint8)
 
 
-def match_objects_across_views(frame_idx: int,
-                               view_frames: List[FrameData],
-                               use_kps_weighted_score: bool,
-                               match_threshold,
-                               min_triangulate_kps_score) -> List[PoseAssociation]:
+def match_objects_across_views(
+    frame_idx: int,
+    view_frames: List[FrameData],
+    use_kps_weighted_score: bool,
+    match_threshold,
+    min_triangulate_kps_score,
+) -> List[PoseAssociation]:
+    """Match poses across multiple views. 
+    
+    The function first selects an initial view by finding the view with the
+    most number of poses. It then creates a `PoseAssociation` object for each pose in the initial view.
+
+    For each remaining view, the function calculates a cost matrix between
+    the `PoseAssociation` objects from the initial view and the poses in the
+    current view. The cost matrix is used to perform bipartite matching
+    to assign the poses in the current view to the `PoseAssociation`
+    objects from the initial view.
+
+    The function then either creates new `PoseAssociation` objects for unmatched poses,
+    or merges the unmatched poses into existing `PoseAssociation` objects.
+
+    Finally, the function returns a list of all the `PoseAssociation` objects
+    representing the matched poses across different views.
+
+    Args:
+        frame_idx (int): Index of the current frame being processed.
+        view_frames (List[FrameData]): A list of `FrameData` objects representing the frames from multiple views.
+        use_kps_weighted_score (bool): Whether to use a weighted score for keypoint matching.
+        match_threshold (float): Matching threshold.
+        min_triangulate_kps_score (float): Minimum score required for keypoints to be triangulated.
+
+    Returns:
+        List[PoseAssociation]: A list of `PoseAssociation` objects representing the matched poses across different views.
+    """
     view_pose_counts = [len(frm.poses) for frm in view_frames]
     init_view_idx = int(np.argmax(view_pose_counts))
     init_frame = view_frames[init_view_idx]

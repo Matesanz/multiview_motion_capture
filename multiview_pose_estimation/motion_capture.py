@@ -5,7 +5,6 @@ import subprocess
 import pandas as pd
 from typing import Dict, List, Optional
 from pathlib import Path
-import torch
 import json
 import scipy.stats as st
 import os
@@ -18,8 +17,6 @@ import argparse
 from dataclasses import dataclass, field
 import json
 import matplotlib.pyplot as plt
-import tensorflow as tf
-import tensorlayer as tl
 import copy
 from tqdm import tqdm
 import imageio
@@ -34,7 +31,7 @@ from pose_viz import plot_poses_3d, plot_poses_3d_reprojects
 from mv_association import match_als
 from common import FrameData, Calib
 from enum import Enum
-from inverse_kinematics_pino import PoseShapeParam, Skeleton, PoseSolver, load_skeleton
+from inverse_kinematics import PoseShapeParam, Skeleton, PoseSolver, load_skeleton
 from pose_viz import draw_poses_concat, draw_pose_epiplar_lines, draw_pose
 from collections import defaultdict
 
@@ -482,8 +479,10 @@ def reprojection_error(p_3d: Pose, p_2d: Pose, calib: Calib, min_valid_kps_score
 
 
 def parse_match_result(match_mat_: np.ndarray, n, dims_group):
-    match_mat = torch.tensor(match_mat_)
-    bin_match = match_mat[:, torch.nonzero(torch.sum(match_mat, dim=0) > 1.9).squeeze()] > 0.9
+    match_mat = np.array(match_mat_)
+    col_sum = np.sum(match_mat, axis=0)
+    col_indices = np.nonzero(col_sum > 1.9)[0]
+    bin_match = match_mat[:, col_indices] > 0.9
     bin_match = bin_match.reshape(n, -1)
     matched_list = [[] for i in range(bin_match.shape[1])]
     for sub_img_id, row in enumerate(bin_match):

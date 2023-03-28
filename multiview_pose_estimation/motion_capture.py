@@ -42,22 +42,22 @@ matplotlib.use('Qt5Agg')
 
 
 class PoseAssociation:
-
-    def __init__(self,
-                 cam: Calib,
-                 frame_idx: int,
-                 view_id: int,
-                 id_obj: Tuple[int, Pose],
-                 use_weighted_kps_score: bool,
-                 min_triangulate_kps_score: float,
-                 match_threshold: float = 200):
+    """
+    Class for associating poses across multiple views and triangulating 3D pose
+    """
+    def __init__(self, cam: Calib, frame_idx: int, view_id: int, id_obj: Tuple[int, Pose],
+                 use_weighted_kps_score: bool, min_triangulate_kps_score: float, match_threshold: float = 200):
         """
-        :param cam:
-        :param frame_idx:
-        :param view_id:
-        :param use_weighted_kps_score:
-        :param min_triangulate_kps_score:
-        :param match_threshold:
+        Initializes a PoseAssociation object
+
+        Args:
+            cam (Calib): The camera calibration parameters
+            frame_idx (int): The index of the frame to associate poses on
+            view_id (int): The view ID
+            id_obj (Tuple[int, Pose]): The ID and the Pose objects to associate
+            use_weighted_kps_score (bool): Whether or not to use weighted keypoint scores
+            min_triangulate_kps_score (float): The minimum keypoint score for triangulation
+            match_threshold (float): The match threshold for association
         """
         self.frame_idx = frame_idx
         self.cams = [cam]
@@ -68,18 +68,46 @@ class PoseAssociation:
         self.min_triangulate_kps_score = min_triangulate_kps_score
         self.cur_pose_3d = None
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """
+        Returns the number of poses associated
+
+        Returns:
+            int: The number of poses associated
+        """
         return len(self.id_poses)
 
     @property
-    def poses(self):
+    def poses(self) -> List[Pose]:
+        """
+        Returns a list of Pose objects associated
+
+        Returns:
+            List[Pose]: A list of Pose objects associated
+        """
         return [obj[1] for obj in self.id_poses]
 
     @property
-    def cam_projs(self):
+    def cam_projs(self) -> List[np.ndarray]:
+        """
+        Returns a list of projection matrices
+
+        Returns:
+            List[np.ndarray]: A list of projection matrices
+        """
         return [c.P for c in self.cams]
 
-    def calc_epipolar_error(self, cam_o: Calib, pose_o: Pose):
+    def calc_epipolar_error(self, cam_o: Calib, pose_o: Pose) -> Tuple[float, bool]:
+        """
+        Calculates the epipolar error between a new pose and the current poses
+
+        Args:
+            cam_o (Calib): The camera calibration parameters of the new pose
+            pose_o (Pose): The new pose object
+
+        Returns:
+            Tuple[float, bool]: The average epipolar error and a boolean indicating if it's too wrong
+        """
         too_wrong = False  # if true we cannot join {other} with this
         total_error = 0
         for pose, cam in zip(self.poses, self.cams):
@@ -94,12 +122,29 @@ class PoseAssociation:
 
         return total_error / len(self.poses), too_wrong
 
-    def merge(self, cam: Calib, id_obj: Tuple[int, Pose], view_id: int):
+    def merge(self, cam: Calib, id_obj: Tuple[int, Pose], view_id: int) -> None:
+        """
+        Merges a new pose to the current association
+
+        Args:
+            cam (Calib): The camera calibration parameters of the new pose
+            id_obj (Tuple[int, Pose]): Tuple containing the id and Pose object of the new pose
+            view_id (int): The id of the view the new pose belongs to
+        """
         self.cams.append(cam)
         self.view_ids.append(view_id)
         self.id_poses.append(id_obj)
 
-    def triangulate(self, min_kps_score=None):
+    def triangulate(self, min_kps_score: Optional[float] = None) -> Optional[np.ndarray]:
+        """
+        Triangulates the 3D position of the object from the 2D poses in the association
+
+        Args:
+            min_kps_score (float, optional): The minimum keypoint score threshold. Defaults to None.
+
+        Returns:
+            Optional[np.ndarray]: The 3D position of the object if triangulation was successful, else None
+        """
         min_kps_score = min_kps_score if min_kps_score is not None else self.min_triangulate_kps_score
         if len(self.poses) >= 2:
             proj_mats = np.array([c.P for c in self.cams])
@@ -111,7 +156,17 @@ class PoseAssociation:
         else:
             raise ValueError('not enough 2d poses for triangulation')
 
-    def calc_reprojection_error(self, update_triangulate):
+    def calc_reprojection_error(self, update_triangulate: bool = False) -> np.ndarray:
+        """
+        Calculates the average reprojection error of the 3D object position to the 2D poses in the association
+
+        Args:
+            update_triangulate (bool, optional): Whether to re-triangulate before calculating reprojection error.
+                Defaults to False.
+
+        Returns:
+            np.ndarray: The average reprojection error for each keypoint
+        """
         if self.cur_pose_3d is None or update_triangulate:
             self.triangulate()
 
@@ -127,7 +182,19 @@ class PoseAssociation:
 
         return kps_avg_err / len(self.poses)
 
-    def debug_get_association_viz(self, view_imgs: Dict[int, np.ndarray], h=256):
+    def debug_get_association_viz(self, view_imgs: Dict[int, np.ndarray], h: int = 256) -> np.ndarray:
+        """
+        Generates a visualization of the association by cropping the views around the object's poses and concatenating
+        them horizontally
+
+        Args:
+            view_imgs (Dict[int, np.ndarray]): A dictionary of view id to view image mappings
+            h (int, optional): The desired height of each crop. Defaults to 256.
+
+        Returns:
+            np.ndarray: The concatenated image visualization of the association
+        """
+
         all_crops = []
         for idx in range(len(self.view_ids)):
             v_id = self.view_ids[idx]
